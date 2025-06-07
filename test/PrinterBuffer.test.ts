@@ -1,5 +1,5 @@
 import { SerialPort } from 'serialport';
-import PrinterBuffer, { Alignment, TextSize, Commands } from '../index';
+import PrinterBuffer, { Alignment, TextSize, Commands } from '../src/index';
 
 type MockSerialPortInstance = {
     isOpen: boolean;
