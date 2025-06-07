@@ -1,6 +1,8 @@
-# Epson TM-U220IID Printer Driver
+# Epson TM-U220* Printer Driver
 
-A TypeScript driver for the Epson TM-U220IID receipt printer. Since it uses standard ESC/POS commands, it may work with other compatible printers as well, however, this driver has only been tested with the TM-U220IID model.
+A TypeScript driver for the Epson TM-U220* receipt printers. Since it uses standard ESC/POS commands, it may work with other compatible printers as well. I only tested it with the TM-U220IID model.
+
+For general ESC/POS printer usage, I recommend using the [escpos](https://www.npmjs.com/package/escpos) package. This driver is intended for cases where you need a minimal, specialized solution specifically for TM-U220* series printers.
 
 ## Installation
 
