@@ -23,12 +23,12 @@ export interface PrinterOptions {
 
 export const Commands = {
     init: ESC + '@',
-    boldOn: ESC + 'E',
-    boldOff: ESC + 'F',
     align: (alignment: Alignment): string => alignment,
     setTextSize: (size: TextSize): string => size,
     feedLines: (n: number): string => ESC + 'd' + String.fromCharCode(n),
-    line: (text: string = ''): string => text + '\n'
+    line: (text: string = ''): string => text + '\n',
+    boldOn: ESC + 'E',
+    boldOff: ESC + 'F'
 } as const;
 
 class PrinterBuffer {
@@ -59,12 +59,6 @@ class PrinterBuffer {
             autoOpen: false
         });
 
-        // Global error handler for unexpected errors
-        this.port.on('error', (error) => {
-            console.error(`Port error: ${error.message}`);
-        });
-
-        // Handle unexpected closes
         this.port.on('close', () => {
             this.port = null;
             this.openPromise = null;
@@ -72,57 +66,32 @@ class PrinterBuffer {
     }
 
     private async ensurePortOpen(): Promise<void> {
-        // If we already have an open port, return immediately
         if (this.port?.isOpen) {
             return;
         }
 
-        // If we're already in the process of opening, return the existing promise
         if (this.openPromise) {
             return this.openPromise;
         }
 
         this.setupPort();
 
-        // Create a new open promise
+        if (!this.port) {
+            throw new Error('Port not initialized');
+        }
+
         this.openPromise = new Promise<void>((resolve, reject) => {
-            if (!this.port) {
-                reject(new Error('Port not initialized'));
-                return;
-            }
-
-            const cleanup = () => {
-                this.port?.removeListener('open', onOpen);
-                this.port?.removeListener('error', onError);
+            this.port!.once('open', () => {
                 this.openPromise = null;
-            };
-
-            const onOpen = () => {
-                cleanup();
                 resolve();
-            };
+            });
 
-            const onError = (error: Error) => {
-                cleanup();
-                reject(new Error(`Failed to open port: ${error.message}`));
-            };
-
-            // Set up one-time event handlers
-            this.port.once('open', onOpen);
-            this.port.once('error', onError);
-
-            // Attempt to open the port
-            try {
-                this.port.open((err) => {
-                    if (err) {
-                        cleanup();
-                        reject(new Error(`Failed to open port: ${err.message}`));
-                    }
-                });
-            } catch (err) {
-                cleanup();
-                reject(new Error(`Failed to open port: ${err}`));
-            }
+            this.port!.open((err) => {
+                if (err) {
+                    this.openPromise = null;
+                    reject(new Error(`Failed to open port: ${err.message}`));
+                }
+            });
         });
 
         return this.openPromise;
@@ -138,13 +107,8 @@ class PrinterBuffer {
         return this;
     }
 
-    bold(text: string): PrinterBuffer {
-        this.buffer.push(Commands.boldOn, Commands.line(text), Commands.boldOff);
-        return this;
-    }
-
-    size(size: TextSize, text: string): PrinterBuffer {
-        this.buffer.push(Commands.setTextSize(size), Commands.line(text), Commands.setTextSize(TextSize.NORMAL));
+    size(size: TextSize): PrinterBuffer {
+        this.buffer.push(Commands.setTextSize(size));
         return this;
     }
 
@@ -160,6 +124,16 @@ class PrinterBuffer {
 
     clear(): PrinterBuffer {
         this.buffer = [];
+        return this;
+    }
+
+    bold(): PrinterBuffer {
+        this.buffer.push(Commands.boldOn);
+        return this;
+    }
+
+    boldOff(): PrinterBuffer {
+        this.buffer.push(Commands.boldOff);
         return this;
     }
 
@@ -218,33 +192,31 @@ class PrinterBuffer {
             return;
         }
 
+        const port = this.port; 
+
         try {
             await new Promise<void>((resolve, reject) => {
-                const cleanup = () => {
-                    this.port?.removeAllListeners();
+                port.once('close', () => {
                     this.port = null;
                     this.openPromise = null;
-                };
-
-                if (!this.port?.isOpen) {
-                    cleanup();
                     resolve();
-                    return;
-                }
+                });
 
-                this.port.close((error) => {
-                    if (error) {
-                        cleanup();
-                        reject(new Error(`Failed to close port: ${error.message}`));
-                        return;
+                port.once('error', (error) => {
+                    this.port = null;
+                    this.openPromise = null;
+                    reject(error);
+                });
+
+                port.close((err) => {
+                    if (err) {
+                        this.port = null;
+                        this.openPromise = null;
+                        reject(new Error(`Failed to close port: ${err.message}`));
                     }
-                    cleanup();
-                    resolve();
                 });
             });
         } catch (error: any) {
-            // Make sure we clean up even on error
-            this.port?.removeAllListeners();
             this.port = null;
             this.openPromise = null;
             throw error;

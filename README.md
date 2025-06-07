@@ -33,10 +33,11 @@ await printer
 await printer
     .init()
     .align(Alignment.CENTER)
-    .size(TextSize.DOUBLE_HEIGHT, 'Welcome')
+    .size(TextSize.DOUBLE_HEIGHT)
+    .text('Double height')
     .align(Alignment.LEFT)
+    .init()
     .text('Regular text')
-    .bold('This is bold')
     .feed(3)
     .print();
 
@@ -49,18 +50,15 @@ The driver supports various text formatting options:
 
 ```typescript
 // Alignment
-printer.align(Alignment.LEFT);    // Default alignment
-printer.align(Alignment.CENTER);  // Center text
-printer.align(Alignment.RIGHT);   // Right align text
+printer.align(Alignment.LEFT);
+printer.align(Alignment.CENTER);
+printer.align(Alignment.RIGHT);
 
 // Text Size
-printer.size(TextSize.NORMAL, 'Normal text');
-printer.size(TextSize.DOUBLE_HEIGHT, 'Double height');
-printer.size(TextSize.DOUBLE_WIDTH, 'Double width');
-printer.size(TextSize.DOUBLE_BOTH, 'Double height and width');
-
-// Bold Text
-printer.bold('This will be bold');
+printer.size(TextSize.NORMAL);
+printer.size(TextSize.DOUBLE_HEIGHT);
+printer.size(TextSize.DOUBLE_WIDTH);
+printer.size(TextSize.DOUBLE_BOTH);
 ```
 
 ## API Reference
@@ -79,9 +77,8 @@ interface PrinterOptions {
 
 - `init()`: Initialize the printer
 - `text(text: string)`: Add text to the buffer
-- `bold(text: string)`: Add bold text
 - `align(alignment: Alignment)`: Set text alignment
-- `size(size: TextSize, text: string)`: Set text size
+- `size(size: TextSize)`: Set text size
 - `feed(lines: number = 2)`: Feed paper lines
 - `clear()`: Clear the print buffer
 - `print()`: Print the buffer contents

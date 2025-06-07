@@ -3,24 +3,84 @@ import PrinterBuffer, { Alignment, TextSize, Commands } from '../index';
 
 type MockSerialPortInstance = {
     isOpen: boolean;
+    opening: boolean;
     open: jest.Mock<void, [(error?: Error) => void]>;
     write: jest.Mock<void, [string, (error?: Error) => void]>;
     drain: jest.Mock<void, [() => void]>;
     close: jest.Mock<void, [(error?: Error) => void]>;
+    on: jest.Mock;
+    once: jest.Mock;
+    removeListener: jest.Mock;
+    removeAllListeners: jest.Mock;
+    emit: jest.Mock;
+    listeners: Map<string, Function[]>;
+};
+
+const createMockInstance = (options: { error?: Error } = {}): MockSerialPortInstance => {
+    const instance: MockSerialPortInstance = {
+        isOpen: false,
+        opening: false,
+        listeners: new Map(),
+        open: jest.fn((callback: (error?: Error) => void) => {
+            if (options.error) {
+                callback(options.error);
+                return;
+            }
+            instance.isOpen = true;
+            instance.opening = false;
+            callback();
+            const listeners = instance.listeners.get('open') || [];
+            listeners.forEach(listener => listener());
+        }),
+        write: jest.fn((data: string, callback: (error?: Error) => void) => callback()),
+        drain: jest.fn((callback: () => void) => callback()),
+        close: jest.fn((callback: (error?: Error) => void) => {
+            instance.isOpen = false;
+            callback();
+            const listeners = instance.listeners.get('close') || [];
+            listeners.forEach(listener => listener());
+        }),
+        on: jest.fn((event: string, handler: Function) => {
+            const listeners = instance.listeners.get(event) || [];
+            listeners.push(handler);
+            instance.listeners.set(event, listeners);
+        }),
+        once: jest.fn((event: string, handler: Function) => {
+            const listeners = instance.listeners.get(event) || [];
+            const wrappedHandler = (...args: any[]) => {
+                handler(...args);
+                const index = listeners.indexOf(wrappedHandler);
+                if (index !== -1) {
+                    listeners.splice(index, 1);
+                }
+            };
+            listeners.push(wrappedHandler);
+            instance.listeners.set(event, listeners);
+        }),
+        removeListener: jest.fn((event: string, handler: Function) => {
+            const listeners = instance.listeners.get(event) || [];
+            const index = listeners.indexOf(handler);
+            if (index !== -1) {
+                listeners.splice(index, 1);
+            }
+        }),
+        removeAllListeners: jest.fn((event?: string) => {
+            if (event) {
+                instance.listeners.delete(event);
+            } else {
+                instance.listeners.clear();
+            }
+        }),
+        emit: jest.fn((event: string, ...args: any[]) => {
+            const listeners = instance.listeners.get(event) || [];
+            listeners.forEach(listener => listener(...args));
+        })
+    };
+    return instance;
 };
 
 jest.mock('serialport', () => {
-    const mockSerialPort = jest.fn().mockImplementation(() => {
-        const instance: MockSerialPortInstance = {
-            isOpen: false,
-            open: jest.fn((callback: (error?: Error) => void) => callback()),
-            write: jest.fn((data: string, callback: (error?: Error) => void) => callback()),
-            drain: jest.fn((callback: () => void) => callback()),
-            close: jest.fn((callback: (error?: Error) => void) => callback()),
-        };
-        return instance;
-    });
-    return { SerialPort: mockSerialPort };
+    return { SerialPort: jest.fn().mockImplementation(() => createMockInstance()) };
 });
 
 const MockSerialPort = SerialPort as unknown as jest.Mock<MockSerialPortInstance>;
@@ -32,6 +92,7 @@ describe('PrinterBuffer', () => {
     beforeEach(() => {
         printer = new PrinterBuffer({ portPath: mockPort });
         jest.clearAllMocks();
+        MockSerialPort.mockImplementation(() => createMockInstance());
     });
 
     describe('Buffer Operations', () => {
@@ -49,15 +110,17 @@ describe('PrinterBuffer', () => {
             printer
                 .init()
                 .text('Line 1')
-                .bold('Bold Text')
+                .size(TextSize.DOUBLE_HEIGHT)
+                .text('Big Text')
+                .size(TextSize.NORMAL)
                 .feed(2);
 
             expect(printer['buffer']).toHaveLength(6);
             expect(printer['buffer']).toContain(Commands.init);
             expect(printer['buffer']).toContain('Line 1\n');
-            expect(printer['buffer']).toContain(Commands.boldOn);
-            expect(printer['buffer']).toContain('Bold Text\n');
-            expect(printer['buffer']).toContain(Commands.boldOff);
+            expect(printer['buffer']).toContain(TextSize.DOUBLE_HEIGHT);
+            expect(printer['buffer']).toContain('Big Text\n');
+            expect(printer['buffer']).toContain(TextSize.NORMAL);
         });
 
         it('should handle text alignment', () => {
@@ -66,14 +129,21 @@ describe('PrinterBuffer', () => {
         });
 
         it('should handle text size', () => {
-            printer.size(TextSize.DOUBLE_HEIGHT, 'Big Text');
+            printer
+                .size(TextSize.DOUBLE_HEIGHT)
+                .text('Big Text')
+                .size(TextSize.NORMAL);
             expect(printer['buffer']).toContain(TextSize.DOUBLE_HEIGHT);
             expect(printer['buffer']).toContain('Big Text\n');
             expect(printer['buffer']).toContain(TextSize.NORMAL);
         });
 
         it('should clear buffer', () => {
-            printer.text('Test').bold('Bold');
+            printer
+                .text('Test')
+                .size(TextSize.DOUBLE_HEIGHT)
+                .text('Big Text')
+                .size(TextSize.NORMAL);
             expect(printer['buffer'].length).toBeGreaterThan(0);
             
             printer.clear();
@@ -94,50 +164,41 @@ describe('PrinterBuffer', () => {
             expect(MockSerialPort).toHaveBeenCalledWith({
                 path: mockPort,
                 baudRate: 9600,
-                autoOpen: true
+                autoOpen: false
             });
 
             const mockInstance = MockSerialPort.mock.results[0].value;
             expect(mockInstance.write).toHaveBeenCalled();
             expect(mockInstance.drain).toHaveBeenCalled();
-        });
+        }, 10000);
 
         it('should handle print errors', async () => {
             const mockError = new Error('Print failed');
-            MockSerialPort.mockImplementationOnce(() => ({
-                isOpen: false,
-                open: jest.fn((callback: (error?: Error) => void) => callback(mockError)),
-                write: jest.fn(),
-                drain: jest.fn(),
-                close: jest.fn(),
-            }));
+            MockSerialPort.mockImplementation(() => createMockInstance({ error: mockError }));
 
             printer.text('Test');
-            await expect(printer.print()).rejects.toThrow('Failed to print: Print failed');
+            await expect(printer.print()).rejects.toThrow('Failed to open port: Print failed');
         });
 
         it('should close port properly', async () => {
-            const mockClose = jest.fn((callback: (error?: Error) => void) => callback());
-            MockSerialPort.mockImplementation(() => ({
-                isOpen: true,
-                open: jest.fn((callback: (error?: Error) => void) => callback()),
-                write: jest.fn((data: string, callback: (error?: Error) => void) => callback()),
-                drain: jest.fn((callback: () => void) => callback()),
-                close: mockClose,
-            }));
+            const instance = createMockInstance();
+            MockSerialPort.mockImplementation(() => instance);
 
             const customPrinter = new PrinterBuffer({ portPath: mockPort });
             customPrinter.text('Test');
             await customPrinter.print();
             await customPrinter.close();
 
-            expect(mockClose).toHaveBeenCalled();
+            expect(instance.close).toHaveBeenCalled();
         });
     });
 
     describe('Configuration', () => {
         it('should accept custom baudRate', async () => {
             const customBaudRate = 115200;
+            const instance = createMockInstance();
+            MockSerialPort.mockImplementation(() => instance);
+
             const customPrinter = new PrinterBuffer({ 
                 portPath: mockPort, 
                 baudRate: customBaudRate 
@@ -149,11 +210,14 @@ describe('PrinterBuffer', () => {
             expect(MockSerialPort).toHaveBeenCalledWith({
                 path: mockPort,
                 baudRate: customBaudRate,
-                autoOpen: true
+                autoOpen: false
             });
         });
 
         it('should accept autoOpen configuration', async () => {
+            const instance = createMockInstance();
+            MockSerialPort.mockImplementation(() => instance);
+
             const customPrinter = new PrinterBuffer({ 
                 portPath: mockPort, 
                 autoOpen: false 
