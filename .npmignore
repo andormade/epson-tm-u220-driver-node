@@ -2,4 +2,7 @@ src
 .gitignore
 .nvmrc
 .npmignore
+test
+jest.config.js
+tsconfig.cjs.json
 tsconfig.json
