@@ -4,13 +4,18 @@ A TypeScript driver for the Epson TM-U220* receipt printers. Since it uses stand
 
 For general ESC/POS printer usage, I recommend using the [escpos](https://www.npmjs.com/package/escpos) package. This driver is intended for cases where you need a minimal, specialized solution specifically for TM-U220* series printers.
 
+The TM-U22* series are impact (dot matrix) printers, which have more limited capabilities compared to thermal receipt printers. Features such as graphics, barcode printing, and advanced formatting are not available.
+
 ## Installation
 
 ```bash
-npm install epson-tm-u220iid-driver
+npm install epson-tm-u220-driver
 ```
 
 ## Usage
+
+**Note:**
+This library does not automatically insert line breaks in your text. The printer itself wraps or breaks lines based on its character width (typically 42 or 48 characters per line, depending on the model and font size), and does not respect whitespace or word boundaries. If you need control over line breaks or word wrapping, manually insert `\n` where needed in your text.
 
 ### Basic Example
 
@@ -35,7 +40,6 @@ await printer
     .align(Alignment.CENTER)
     .size(TextSize.DOUBLE_HEIGHT)
     .text('Double height')
-    .align(Alignment.LEFT)
     .init()
     .text('Regular text')
     .feed(3)

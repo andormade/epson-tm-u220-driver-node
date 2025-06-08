@@ -1,5 +1,5 @@
 {
-  "name": "epson-tm-u220iid-driver",
+  "name": "epson-tm-u220-driver",
   "version": "1.0.0",
   "description": "Small node.js util to send commands to Epson U220* receipt printers",
   "type": "module",
