@@ -14,9 +14,6 @@ npm install epson-tm-u220-driver
 
 ## Usage
 
-**Note:**
-This library does not automatically insert line breaks in your text. The printer itself wraps or breaks lines based on its character width (typically 42 or 48 characters per line, depending on the model and font size), and does not respect whitespace or word boundaries. If you need control over line breaks or word wrapping, manually insert `\n` where needed in your text.
-
 ### Basic Example
 
 ```typescript
@@ -47,6 +44,12 @@ await printer
 
 await printer.close(); // Close the port when done
 ```
+
+### Usage notes
+
+This library does not automatically insert line breaks in your text. The printer itself wraps or breaks lines based on its character width (typically 42 or 48 characters per line, depending on the model and font size), and does not respect whitespace or word boundaries. If you need control over line breaks or word wrapping, manually insert `\n` where needed in your text.
+
+Because the character set of these printers is quite limited, I recommend using a library like [transliteration](https://www.npmjs.com/package/transliteration) to convert Unicode characters to their closest ASCII equivalents before printing.
 
 ### Text Formatting
 
